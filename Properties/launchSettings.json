@@ -5,6 +5,7 @@
       "launchBrowser": true,
       "launchUrl": "swagger",
       "environmentVariables": {
+        "OPENAI_KEY": "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",
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "dotnetRunMessages": true,
@@ -15,6 +16,7 @@
       "launchBrowser": true,
       "launchUrl": "swagger",
       "environmentVariables": {
+        "OPENAI_KEY": "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",
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },

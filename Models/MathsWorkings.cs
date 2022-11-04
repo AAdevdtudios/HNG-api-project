@@ -10,9 +10,9 @@ namespace HNG_api_project.Models
     }
     public class MathsWorkings
     {
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public Operations operation_type { get; set; }
-        public int x { get; set; } = 0;
-        public int y { get; set; } = 0;
+        //[JsonConverter(typeof(JsonStringEnumConverter))]
+        public string operation_type { get; set; } = Operations.addition.ToString();
+        public int x { get; set; }
+        public int y { get; set; }
     }
 }

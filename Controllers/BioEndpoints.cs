@@ -6,8 +6,20 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using HNG_api_project.Models;
 using HNG_api_project.Models.ResponseOutput;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.CodeAnalysis;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NuGet.Protocol;
+using OpenAI;
+using OpenAI_API;
+using RestSharp;
+using System.Diagnostics;
 using System.Globalization;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using static Microsoft.Extensions.Logging.EventSource.LoggingEventSource;
 
 namespace HNG_api_project.Controllers;
 
@@ -28,52 +40,76 @@ public static class BioEndpoints
         .WithName("GetAllBios")
         .Produces<Bio[]>(StatusCodes.Status200OK);
 
-        /*routes.MapPost("/uploadIt", (IFormFile file, HttpRequest request) =>
-        {
-            var csv = new List<string[]>();
-            using (var reader = new StreamReader(request.Body, System.Text.Encoding.UTF8))
-            {
-                return Results.Ok(reader);
-            }
-        })
-        .WithName("UploadingFiles");*/
-
-        byte[] Create_the_File(string users)
-        {
-            using var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Users");
-            var currentRow = 1;
-            worksheet.Cell(currentRow, 1).Value = "Id";
-            worksheet.Cell(currentRow, 2).Value = "Title";
-            worksheet.Cell(currentRow, 3).Value = "FirstName";
-
-            foreach (var user in users)
-            {
-                currentRow++;
-                worksheet.Cell(currentRow, 1).Value = user;
-                worksheet.Cell(currentRow, 2).Value = user;
-            }
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            var content = stream.ToArray();
-            return content;
-        }
         routes.MapPost("/calculation", (MathsWorkings mathsWorkings, HttpRequest request) =>
         {
             var responce = new MathCalResponse<MathsWorkings>();
+            var list = new string[] { "Add", "Addition", "Plus", "+", "Sum", "Total", "Subtraction","Minus", "-","*", "Difference","Take Away", "Deduct","Multiply", "Product", "By", "Times"};
+            var addition = new List<string>(new string[] { "Add", "Addition", "Plus", "+", "Sum", "Total", });
+            var subtract = new List<string>(new string[] { "Subtraction", "Minus", "-","Difference", "Take Away", "Deduct", });
+            var multiply = new List<string>(new string[] { "Product", "By", "Times","*" });
+            //var list = Enum.GetNames(typeof(Operations));
+            string value = mathsWorkings.operation_type.ToLower();
+            string[] seperator = new string[] { ",", ".", "!", "\\"," ","\'s"};
+            List<string> words = mathsWorkings.operation_type.Split(seperator, StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            if(words.Count > 1)
+            {
+                //Do something
+                OpenAiModelLab bio = new OpenAiModelLab()
+                {
+                    model = "text-davinci-002",
+                    prompt = mathsWorkings.operation_type
+                };
+
+                string answer = callOpenAI(150, bio.prompt, bio.model, 0.7, 1, 0, 0);
+                string[] numbers = Regex.Split(answer, @"\D+");
+                List<int> values = new List<int>();
+
+                foreach (string outputsInt in numbers)
+                {
+                    if (!string.IsNullOrEmpty(outputsInt))
+                    {
+                        int i = int.Parse(outputsInt);
+                        values.Add(i);
+                    }
+                }
+
+                var matched = list.Where(keyword =>
+                    Regex.IsMatch(value, Regex.Escape(keyword), RegexOptions.IgnoreCase));
+
+                foreach (string item in matched)
+                {
+                    if(addition.Exists(i=> i.Equals(item)))
+                    {
+                        value = "addition";
+                    }else if(subtract.Exists(i => i.Equals(item)))
+                    {
+                        value = "subtraction";
+                    }
+                    else
+                    {
+                        value = "multiplication";
+                    }
+
+                }
+                responce.operation_type = Enum.Parse<Operations>(value);
+                responce.result = values.Last();
+                return Results.Ok(responce);
+            }
+
             try
             {
                 int answer = 0;
 
-                switch (mathsWorkings.operation_type)
+                switch (value)
                 {
-                    case Operations.addition:
+                    case "addition":
                         answer = mathsWorkings.x + mathsWorkings.y;
                         break;
-                    case Operations.subtraction:
+                    case "subtraction":
                         answer = mathsWorkings.x - mathsWorkings.y;
                         break;
-                    case Operations.multiplication:
+                    case "multiplication":
                         answer = mathsWorkings.x * mathsWorkings.y;
                         break;
                     default:
@@ -81,7 +117,7 @@ public static class BioEndpoints
                         break;
                 }
                 responce.result = answer;
-                responce.operation_type = mathsWorkings.operation_type;
+                responce.operation_type = Enum.Parse<Operations>(value);
                 return Results.Ok(responce);
             }
             catch (Exception e)
@@ -89,17 +125,66 @@ public static class BioEndpoints
                 return Results.BadRequest(e.Message);
             }
         });
-        /*routes.MapPost("/upload",(HttpRequest request) =>
+
+        routes.MapPost("/cals", async () =>
         {
-            using (var reader = new StreamReader(request.Body, System.Text.Encoding.UTF8))
-
-            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+            //var api = new OpenAI.OpenAIClient(authentication:OpenAI.OpenAIAuthentication.LoadFromEnv());
+            var api = new OpenAI_API.OpenAIAPI(APIAuthentication.LoadFromEnv(), OpenAI_API.Engine.Ada);
+            var request = new SearchRequest()
             {
-                var records = csv.GetRecords<CSVdata>();
-                return Results.Ok(csv.ToJson(Newtonsoft.Json.Formatting.Indented));
-            }
-            //return Results.File(Create_the_File("Somedata"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "someting.csv");
+                Query = "Washington DC",
+                Documents = new List<string> { "Canada", "China", "USA", "Spain" }
+            };
+            var result = await api.Search.GetBestMatchAsync(request);
+            return Results.Ok(result);
+        });
+        static string callOpenAI(int tokens, string input, string engine,
+                  double temperature, int topP, int frequencyPenalty, int presencePenalty)
+        {
 
-        }).Accepts<IFormFile>("application/json");*/
+            var openAiKey = "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";
+
+            var apiCall = "https://api.openai.com/v1/engines/" + engine + "/completions";
+
+            try
+            {
+
+                using (var httpClient = new HttpClient())
+                {
+                    using (var request = new HttpRequestMessage(new HttpMethod("POST"), apiCall))
+                    {
+                        request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + openAiKey);
+                        request.Content = new StringContent("{\n  \"prompt\": \"" + input + "\",\n  \"temperature\": " +
+                                                            temperature.ToString(CultureInfo.InvariantCulture) + ",\n  \"max_tokens\": " + tokens + ",\n  \"top_p\": " + topP +
+                                                            ",\n  \"frequency_penalty\": " + frequencyPenalty + ",\n  \"presence_penalty\": " + presencePenalty + "\n}");
+
+                        request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+
+                        var response = httpClient.SendAsync(request).Result;
+                        var json = response.Content.ReadAsStringAsync().Result;
+
+                        dynamic dynObj = JsonConvert.DeserializeObject(json);
+
+                        if (dynObj != null)
+                        {
+                            return dynObj.choices[0].text.ToString();
+                        }
+
+
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+
+            }
+
+            return null;
+
+
+        }
+
     }
 }
