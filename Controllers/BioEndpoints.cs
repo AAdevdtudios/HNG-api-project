@@ -57,7 +57,7 @@ public static class BioEndpoints
                 //Do something
                 OpenAiModelLab bio = new OpenAiModelLab()
                 {
-                    model = "text-davinci-002",
+                    model = "text-curie-001",
                     prompt = mathsWorkings.operation_type
                 };
 
@@ -142,7 +142,7 @@ public static class BioEndpoints
                   double temperature, int topP, int frequencyPenalty, int presencePenalty)
         {
 
-            var openAiKey = "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";
+            var openAiKey = "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";
 
             var apiCall = "https://api.openai.com/v1/engines/" + engine + "/completions";
 
