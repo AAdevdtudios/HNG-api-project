@@ -142,7 +142,7 @@ public static class BioEndpoints
                   double temperature, int topP, int frequencyPenalty, int presencePenalty)
         {
 
-            var openAiKey = "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";
+            var openAiKey = "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";
 
             var apiCall = "https://api.openai.com/v1/engines/" + engine + "/completions";
 
